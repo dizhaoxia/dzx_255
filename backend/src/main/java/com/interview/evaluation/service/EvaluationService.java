@@ -1,6 +1,7 @@
 package com.interview.evaluation.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.interview.evaluation.dto.DimensionScoreDTO;
 import com.interview.evaluation.dto.EvaluationSubmitDTO;
 import com.interview.evaluation.entity.*;
 import com.interview.evaluation.mapper.*;
@@ -172,7 +173,7 @@ public class EvaluationService {
         }
 
         if (dto.getDimensionScores() != null) {
-            for (var dimScore : dto.getDimensionScores()) {
+            for (DimensionScoreDTO dimScore : dto.getDimensionScores()) {
                 QueryWrapper<EvaluationRecord> queryWrapper = new QueryWrapper<>();
                 queryWrapper.eq("task_id", dto.getTaskId());
                 queryWrapper.eq("dimension_id", dimScore.getDimensionId());

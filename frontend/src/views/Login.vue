@@ -6,7 +6,7 @@
         <p>欢迎登录</p>
       </div>
       <el-form
-        ref="loginForm"
+        ref="loginFormRef"
         :model="loginForm"
         :rules="loginRules"
         class="login-form"
@@ -17,7 +17,7 @@
             v-model="loginForm.username"
             placeholder="请输入用户名"
             size="large"
-            prefix-icon="User"
+            :prefix-icon="User"
           />
         </el-form-item>
         <el-form-item prop="password">
@@ -26,7 +26,7 @@
             type="password"
             placeholder="请输入密码"
             size="large"
-            prefix-icon="Lock"
+            :prefix-icon="Lock"
             show-password
           />
         </el-form-item>
@@ -56,6 +56,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { ElMessage } from 'element-plus'
+import { User, Lock } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()
