@@ -24,6 +24,8 @@ public class EvaluationRecord {
 
     private String comment;
 
+    private String selectedTags;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

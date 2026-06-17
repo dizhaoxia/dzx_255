@@ -5,14 +5,11 @@ import java.util.List;
 import java.util.Map;
 
 @Data
-public class EvaluationSummaryVO {
+public class CandidateCompareVO {
     private Long candidateId;
     private String candidateName;
     private String positionName;
-    private List<InterviewerEvaluationVO> interviewerEvaluations;
-    private Map<String, Double> dimensionAverages;
-    private Double totalAverage;
-    private Integer evaluationCount;
-    private Double weightedTotalScore;
+    private Double totalWeightedScore;
+    private Map<String, Double> dimensionScores;
     private Map<String, Double> weightedDimensionScores;
 }

@@ -37,3 +37,11 @@ export function getDimensions() {
     method: 'get'
   })
 }
+
+export function getDimensionTags(positionId) {
+  return request({ url: '/interviewer/tags', method: 'get', params: { positionId } })
+}
+
+export function getDimensionsByPosition(positionId) {
+  return request({ url: '/interviewer/dimensions/by-position', method: 'get', params: { positionId } })
+}

@@ -15,10 +15,40 @@
           <h2>{{ summary.candidateName }}</h2>
           <p>应聘岗位：{{ summary.positionName }}</p>
         </div>
-        <div class="overall-score">
-          <div class="score-number">{{ summary.totalAverage?.toFixed(2) || '0.00' }}</div>
-          <div class="score-label">总平均分</div>
-          <div class="score-count">{{ summary.evaluationCount }}位面试官评价</div>
+        <div class="score-group">
+          <div class="overall-score">
+            <div class="score-number">{{ summary.totalAverage?.toFixed(2) || '0.00' }}</div>
+            <div class="score-label">总平均分</div>
+            <div class="score-count">{{ summary.evaluationCount }}位面试官评价</div>
+          </div>
+          <div class="overall-score weighted" v-if="summary.weightedTotalScore != null">
+            <div class="score-number">{{ summary.weightedTotalScore?.toFixed(2) || '0.00' }}</div>
+            <div class="score-label">加权总分</div>
+            <div class="score-count">按模板权重计算</div>
+          </div>
+        </div>
+      </div>
+    </el-card>
+
+    <el-card v-if="summary && summary.weightedDimensionScores" class="dimensions-card">
+      <template #header>
+        <span class="section-title">各维度加权得分</span>
+      </template>
+      <div class="dimension-averages">
+        <div
+          v-for="(score, code) in summary.weightedDimensionScores"
+          :key="code"
+          class="dim-average-item"
+        >
+          <div class="dim-name">{{ getDimensionName(code) }}</div>
+          <el-progress
+            type="dashboard"
+            :percentage="Math.min(100, (score / 5) * 100)"
+            :format="() => score?.toFixed(2) || '0'"
+            :width="100"
+            :stroke-width="8"
+            color="#67c23a"
+          />
         </div>
       </div>
     </el-card>
@@ -268,6 +298,15 @@ onMounted(() => {
 .overall-score {
   text-align: center;
   padding: 0 30px;
+}
+
+.score-group {
+  display: flex;
+  gap: 30px;
+}
+
+.overall-score.weighted .score-number {
+  color: #67c23a;
 }
 
 .score-number {

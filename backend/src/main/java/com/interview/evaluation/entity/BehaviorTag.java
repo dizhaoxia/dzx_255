@@ -2,32 +2,21 @@ package com.interview.evaluation.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("evaluation_summary")
-public class EvaluationSummary {
+@TableName("behavior_tag")
+public class BehaviorTag {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private Long taskId;
+    private Long dimensionId;
 
-    private Long candidateId;
+    private String tagName;
 
-    private Long interviewerId;
+    private String tagType;
 
-    private String overallComment;
-
-    private String hireSuggestion;
-
-    private BigDecimal totalScore;
-
-    private BigDecimal weightedScore;
-
-    private String status;
-
-    private LocalDateTime submitTime;
+    private Integer sortOrder;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

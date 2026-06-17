@@ -20,4 +20,5 @@ public class InterviewTaskVO {
     private LocalDateTime interviewTime;
     private String status;
     private String interviewerName;
+    private String videoUrl;
 }

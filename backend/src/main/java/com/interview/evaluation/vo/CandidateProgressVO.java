@@ -21,4 +21,8 @@ public class CandidateProgressVO {
     private Integer draftCount;
     private Integer pendingCount;
     private List<InterviewTaskVO> tasks;
+    private Boolean hasScoreDiscrepancy;
+    private List<String> discrepancyDimensions;
+    private Double weightedTotalScore;
+    private java.util.Map<String, Double> weightedDimensionScores;
 }

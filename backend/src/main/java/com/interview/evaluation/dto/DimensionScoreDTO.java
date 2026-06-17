@@ -8,4 +8,6 @@ public class DimensionScoreDTO {
     private String dimensionCode;
     private Integer score;
     private String comment;
+
+    private String selectedTags;
 }

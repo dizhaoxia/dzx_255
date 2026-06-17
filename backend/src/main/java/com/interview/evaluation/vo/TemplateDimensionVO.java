@@ -3,15 +3,14 @@ package com.interview.evaluation.vo;
 import lombok.Data;
 
 @Data
-public class DimensionScoreVO {
+public class TemplateDimensionVO {
+    private Long id;
     private Long dimensionId;
     private String dimensionCode;
     private String dimensionName;
-    private Integer score;
-    private String comment;
+    private String dimensionDesc;
+    private Integer weightPercent;
     private Integer maxScore;
     private Integer minScore;
-    private Integer weightPercent;
-    private String selectedTags;
-    private Double weightedScore;
+    private Integer sortOrder;
 }

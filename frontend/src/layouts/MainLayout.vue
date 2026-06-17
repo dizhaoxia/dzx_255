@@ -38,6 +38,14 @@
               <el-icon><DataAnalysis /></el-icon>
               <span>进度看板</span>
             </el-menu-item>
+            <el-menu-item index="/hr/compare">
+              <el-icon><Scale /></el-icon>
+              <span>候选人对比</span>
+            </el-menu-item>
+            <el-menu-item index="/hr/funnel">
+              <el-icon><TrendCharts /></el-icon>
+              <span>招聘漏斗</span>
+            </el-menu-item>
           </el-sub-menu>
         </template>
       </el-menu>

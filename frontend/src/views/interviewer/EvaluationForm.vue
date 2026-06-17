@@ -26,6 +26,12 @@
           <span class="label">面试轮次：</span>
           <span class="value">第{{ candidateInfo.interviewRound }}轮</span>
         </div>
+        <div class="info-item" v-if="candidateInfo.videoUrl">
+          <el-button type="primary" size="small" @click="openVideo">
+            <el-icon><VideoPlay /></el-icon>
+            回看录像
+          </el-button>
+        </div>
       </div>
     </el-card>
 
@@ -47,6 +53,22 @@
             </div>
           </div>
         </template>
+        <div class="tags-area" v-if="dimensionTagsMap[dim.dimensionId]">
+          <div class="tags-label">行为事例标签：</div>
+          <div class="tags-list">
+            <el-tag
+              v-for="tag in dimensionTagsMap[dim.dimensionId]"
+              :key="tag.id"
+              :type="getTagType(tag.tagType, dim.selectedTags?.includes(tag.tagName))"
+              class="behavior-tag"
+              effect="plain"
+              :disabled="isSubmitted"
+              @click="toggleTag(dim, tag)"
+            >
+              {{ tag.tagName }}
+            </el-tag>
+          </div>
+        </div>
         <el-input
           v-model="dim.comment"
           type="textarea"
@@ -55,6 +77,7 @@
           placeholder="请输入该维度的评价说明..."
           maxlength="500"
           show-word-limit
+          style="margin-top: 12px;"
         />
       </el-card>
     </div>
@@ -114,8 +137,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getEvaluationDetail, saveDraft, submitEvaluation } from '@/api/interviewer'
+import { getEvaluationDetail, saveDraft, submitEvaluation, getDimensionTags } from '@/api/interviewer'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { VideoPlay } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -130,6 +154,7 @@ const dimensionScores = ref([])
 const overallComment = ref('')
 const hireSuggestion = ref('')
 const currentStatus = ref('')
+const dimensionTagsMap = ref({})
 
 const isSubmitted = computed(() => currentStatus.value === 'SUBMITTED')
 const isDraft = computed(() => currentStatus.value === 'DRAFT')
@@ -140,6 +165,81 @@ const pageTitle = computed(() => {
   return '填写评价'
 })
 
+const openVideo = () => {
+  if (candidateInfo.value?.videoUrl) {
+    window.open(candidateInfo.value.videoUrl, '_blank')
+  }
+}
+
+const loadDimensionTags = async (positionId) => {
+  if (!positionId) return
+  try {
+    const res = await getDimensionTags(positionId)
+    if (res.code === 200 && res.data) {
+      const tagsMap = {}
+      res.data.forEach(tag => {
+        if (!tagsMap[tag.dimensionId]) {
+          tagsMap[tag.dimensionId] = []
+        }
+        tagsMap[tag.dimensionId].push(tag)
+      })
+      dimensionTagsMap.value = tagsMap
+    }
+  } catch (e) {
+    console.error('加载维度标签失败', e)
+  }
+}
+
+const parseSelectedTags = (selectedTagsStr) => {
+  if (!selectedTagsStr) return []
+  return selectedTagsStr.split(',').map(s => s.trim()).filter(Boolean)
+}
+
+const getTagType = (tagType, isSelected) => {
+  if (isSelected) {
+    if (tagType === 'POSITIVE') return 'success'
+    if (tagType === 'NEGATIVE') return 'danger'
+    return ''
+  }
+  return 'info'
+}
+
+const toggleTag = (dim, tag) => {
+  if (isSubmitted.value) return
+  if (!dim.selectedTags) {
+    dim.selectedTags = []
+  }
+  const index = dim.selectedTags.indexOf(tag.tagName)
+  if (index > -1) {
+    dim.selectedTags.splice(index, 1)
+  } else {
+    dim.selectedTags.push(tag.tagName)
+  }
+  updateCommentFromTags(dim)
+}
+
+const updateCommentFromTags = (dim) => {
+  if (!dim.selectedTags || dim.selectedTags.length === 0) return
+  const tagsStr = dim.selectedTags.join(',')
+  if (!dim.comment) {
+    dim.comment = tagsStr
+  } else {
+    const existingTags = (dim.manualCommentTags || []).join(',')
+    if (!dim.originalComment) {
+      dim.originalComment = dim.comment
+    }
+    if (dim.comment.endsWith(existingTags) || !existingTags) {
+      const commentWithoutTags = existingTags
+        ? dim.comment.slice(0, dim.comment.length - existingTags.length).replace(/[,\s]+$/, '')
+        : dim.comment
+      dim.comment = commentWithoutTags
+        ? `${commentWithoutTags},${tagsStr}`
+        : tagsStr
+    }
+    dim.manualCommentTags = [...dim.selectedTags]
+  }
+}
+
 const loadEvaluationDetail = async () => {
   try {
     loading.value = true
@@ -148,9 +248,15 @@ const loadEvaluationDetail = async () => {
       const data = res.data
       currentStatus.value = data.status
       candidateInfo.value = data
-      dimensionScores.value = data.dimensionScores || []
+      dimensionScores.value = (data.dimensionScores || []).map(d => ({
+        ...d,
+        selectedTags: parseSelectedTags(d.selectedTags)
+      }))
       overallComment.value = data.overallComment || ''
       hireSuggestion.value = data.hireSuggestion || ''
+      if (data.positionId) {
+        loadDimensionTags(data.positionId)
+      }
     }
   } catch (e) {
     console.error(e)
@@ -186,7 +292,8 @@ const handleSaveDraft = async () => {
         dimensionId: d.dimensionId,
         dimensionCode: d.dimensionCode,
         score: d.score || 0,
-        comment: d.comment
+        comment: d.comment,
+        selectedTags: d.selectedTags ? d.selectedTags.join(',') : ''
       })),
       overallComment: overallComment.value,
       hireSuggestion: hireSuggestion.value
@@ -226,7 +333,8 @@ const handleSubmit = async () => {
         dimensionId: d.dimensionId,
         dimensionCode: d.dimensionCode,
         score: d.score,
-        comment: d.comment
+        comment: d.comment,
+        selectedTags: d.selectedTags ? d.selectedTags.join(',') : ''
       })),
       overallComment: overallComment.value,
       hireSuggestion: hireSuggestion.value
@@ -336,5 +444,33 @@ const goBack = () => {
 
 .action-bar .el-button {
   min-width: 150px;
+}
+
+.tags-area {
+  background: #f5f7fa;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 12px;
+}
+
+.tags-label {
+  color: #909399;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.behavior-tag {
+  cursor: pointer;
+  user-select: none;
+}
+
+.behavior-tag.is-disabled {
+  cursor: not-allowed;
 }
 </style>

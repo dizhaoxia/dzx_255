@@ -22,6 +22,8 @@ public class InterviewTask {
 
     private LocalDateTime interviewTime;
 
+    private String videoUrl;
+
     private String status;
 
     @TableField(fill = FieldFill.INSERT)

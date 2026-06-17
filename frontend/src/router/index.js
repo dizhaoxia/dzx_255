@@ -51,6 +51,18 @@ const routes = [
         name: 'HrCandidateEvaluation',
         component: () => import('@/views/hr/CandidateEvaluation.vue'),
         meta: { title: '评价详情', roles: ['HR'] }
+      },
+      {
+        path: 'hr/compare',
+        name: 'HrCandidateCompare',
+        component: () => import('@/views/hr/CandidateCompare.vue'),
+        meta: { title: '候选人横向对比', roles: ['HR'] }
+      },
+      {
+        path: 'hr/funnel',
+        name: 'HrFunnel',
+        component: () => import('@/views/hr/FunnelDashboard.vue'),
+        meta: { title: '招聘漏斗统计', roles: ['HR'] }
       }
     ]
   }

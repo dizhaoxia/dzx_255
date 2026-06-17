@@ -18,4 +18,6 @@ public class EvaluationDetailVO {
     private String overallComment;
     private String hireSuggestion;
     private Double totalScore;
+    private Double weightedScore;
+    private String videoUrl;
 }

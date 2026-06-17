@@ -36,6 +36,9 @@ public class HrService {
     @Autowired
     private EvaluationSummaryMapper evaluationSummaryMapper;
 
+    @Autowired
+    private EvaluationTemplateService evaluationTemplateService;
+
     public List<Position> getPositionList() {
         QueryWrapper<Position> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("status", 1);
@@ -116,6 +119,18 @@ public class HrService {
             } else {
                 vo.setOverallStatus("PENDING");
             }
+
+            ScoreDiscrepancyVO discrepancyVO = detectScoreDiscrepancy(candidate.getId());
+            vo.setHasScoreDiscrepancy(discrepancyVO.getHasDiscrepancy());
+            List<String> discrepancyDimensions = discrepancyVO.getDimensionDiscrepancies()
+                    .stream()
+                    .map(DimensionDiscrepancyVO::getDimensionName)
+                    .collect(Collectors.toList());
+            vo.setDiscrepancyDimensions(discrepancyDimensions);
+
+            Map<String, Object> weightedSummary = calculateWeightedSummary(candidate.getId());
+            vo.setWeightedTotalScore((Double) weightedSummary.get("weightedTotalScore"));
+            vo.setWeightedDimensionScores((Map<String, Double>) weightedSummary.get("weightedDimensionScores"));
 
             result.add(vo);
         }
@@ -237,6 +252,10 @@ public class HrService {
             result.setTotalAverage(0.0);
         }
 
+        Map<String, Object> weightedSummary = calculateWeightedSummary(candidateId);
+        result.setWeightedTotalScore((Double) weightedSummary.get("weightedTotalScore"));
+        result.setWeightedDimensionScores((Map<String, Double>) weightedSummary.get("weightedDimensionScores"));
+
         return result;
     }
 
@@ -308,5 +327,251 @@ public class HrService {
         }
 
         return csv.toString();
+    }
+
+    public Map<String, Object> calculateWeightedSummary(Long candidateId) {
+        Map<String, Object> result = new HashMap<>();
+        Map<String, Double> weightedDimensionScores = new LinkedHashMap<>();
+        double weightedTotalScore = 0.0;
+
+        Candidate candidate = candidateMapper.selectById(candidateId);
+        if (candidate == null) {
+            result.put("weightedTotalScore", 0.0);
+            result.put("weightedDimensionScores", weightedDimensionScores);
+            return result;
+        }
+
+        TemplateDetailVO template = evaluationTemplateService.getTemplateByPosition(candidate.getPositionId());
+        if (template == null || template.getDimensions() == null || template.getDimensions().isEmpty()) {
+            result.put("weightedTotalScore", 0.0);
+            result.put("weightedDimensionScores", weightedDimensionScores);
+            return result;
+        }
+
+        Map<String, Double> dimensionAverages = getDimensionAverages(candidateId);
+
+        for (TemplateDimensionVO dimVO : template.getDimensions()) {
+            Double avgScore = dimensionAverages.get(dimVO.getDimensionCode());
+            if (avgScore == null) {
+                avgScore = 0.0;
+            }
+            double weightedScore = avgScore * dimVO.getWeightPercent() / 100.0;
+            BigDecimal bd = BigDecimal.valueOf(weightedScore).setScale(2, RoundingMode.HALF_UP);
+            weightedDimensionScores.put(dimVO.getDimensionCode(), bd.doubleValue());
+            weightedTotalScore += bd.doubleValue();
+        }
+
+        BigDecimal totalBd = BigDecimal.valueOf(weightedTotalScore).setScale(2, RoundingMode.HALF_UP);
+        result.put("weightedTotalScore", totalBd.doubleValue());
+        result.put("weightedDimensionScores", weightedDimensionScores);
+        return result;
+    }
+
+    private Map<String, Double> getDimensionAverages(Long candidateId) {
+        Map<String, Double> result = new LinkedHashMap<>();
+
+        QueryWrapper<InterviewTask> taskQuery = new QueryWrapper<>();
+        taskQuery.eq("candidate_id", candidateId);
+        taskQuery.eq("status", "SUBMITTED");
+        List<InterviewTask> tasks = interviewTaskMapper.selectList(taskQuery);
+
+        Map<String, List<Integer>> dimensionScoresMap = new LinkedHashMap<>();
+        List<EvaluationDimension> dimensions = evaluationDimensionMapper.selectList(
+                new QueryWrapper<EvaluationDimension>().eq("is_default", 1).orderByAsc("sort_order")
+        );
+        for (EvaluationDimension dim : dimensions) {
+            dimensionScoresMap.put(dim.getDimensionCode(), new ArrayList<>());
+        }
+
+        for (InterviewTask task : tasks) {
+            QueryWrapper<EvaluationRecord> recordQuery = new QueryWrapper<>();
+            recordQuery.eq("task_id", task.getId());
+            List<EvaluationRecord> records = evaluationRecordMapper.selectList(recordQuery);
+
+            for (EvaluationDimension dim : dimensions) {
+                for (EvaluationRecord record : records) {
+                    if (record.getDimensionId().equals(dim.getId())
+                            && record.getScore() != null && record.getScore() > 0) {
+                        dimensionScoresMap.get(dim.getDimensionCode()).add(record.getScore());
+                        break;
+                    }
+                }
+            }
+        }
+
+        for (Map.Entry<String, List<Integer>> entry : dimensionScoresMap.entrySet()) {
+            List<Integer> scores = entry.getValue();
+            if (!scores.isEmpty()) {
+                double avg = scores.stream().mapToInt(Integer::intValue).average().getAsDouble();
+                BigDecimal bd = BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP);
+                result.put(entry.getKey(), bd.doubleValue());
+            } else {
+                result.put(entry.getKey(), 0.0);
+            }
+        }
+
+        return result;
+    }
+
+    public ScoreDiscrepancyVO detectScoreDiscrepancy(Long candidateId) {
+        ScoreDiscrepancyVO result = new ScoreDiscrepancyVO();
+        result.setCandidateId(candidateId);
+
+        Candidate candidate = candidateMapper.selectById(candidateId);
+        if (candidate != null) {
+            result.setCandidateName(candidate.getName());
+        }
+
+        result.setHasDiscrepancy(false);
+        List<DimensionDiscrepancyVO> discrepancies = new ArrayList<>();
+
+        QueryWrapper<InterviewTask> taskQuery = new QueryWrapper<>();
+        taskQuery.eq("candidate_id", candidateId);
+        taskQuery.eq("status", "SUBMITTED");
+        List<InterviewTask> tasks = interviewTaskMapper.selectList(taskQuery);
+
+        if (tasks.size() < 2) {
+            result.setDimensionDiscrepancies(discrepancies);
+            return result;
+        }
+
+        List<EvaluationDimension> dimensions = evaluationDimensionMapper.selectList(
+                new QueryWrapper<EvaluationDimension>().eq("is_default", 1).orderByAsc("sort_order")
+        );
+
+        for (EvaluationDimension dim : dimensions) {
+            List<InterviewerScoreVO> interviewerScores = new ArrayList<>();
+            int maxScore = Integer.MIN_VALUE;
+            int minScore = Integer.MAX_VALUE;
+            boolean hasValidScore = false;
+
+            for (InterviewTask task : tasks) {
+                QueryWrapper<EvaluationRecord> recordQuery = new QueryWrapper<>();
+                recordQuery.eq("task_id", task.getId());
+                recordQuery.eq("dimension_id", dim.getId());
+                EvaluationRecord record = evaluationRecordMapper.selectOne(recordQuery);
+
+                if (record != null && record.getScore() != null && record.getScore() > 0) {
+                    InterviewerScoreVO scoreVO = new InterviewerScoreVO();
+                    scoreVO.setInterviewerId(task.getInterviewerId());
+                    SysUser interviewer = sysUserMapper.selectById(task.getInterviewerId());
+                    if (interviewer != null) {
+                        scoreVO.setInterviewerName(interviewer.getRealName());
+                    }
+                    scoreVO.setScore(record.getScore());
+                    interviewerScores.add(scoreVO);
+
+                    if (record.getScore() > maxScore) {
+                        maxScore = record.getScore();
+                    }
+                    if (record.getScore() < minScore) {
+                        minScore = record.getScore();
+                    }
+                    hasValidScore = true;
+                }
+            }
+
+            if (hasValidScore && interviewerScores.size() >= 2) {
+                int range = maxScore - minScore;
+                if (range >= 2) {
+                    DimensionDiscrepancyVO discrepancyVO = new DimensionDiscrepancyVO();
+                    discrepancyVO.setDimensionCode(dim.getDimensionCode());
+                    discrepancyVO.setDimensionName(dim.getDimensionName());
+                    discrepancyVO.setMaxScore(maxScore);
+                    discrepancyVO.setMinScore(minScore);
+                    discrepancyVO.setRange(range);
+                    discrepancyVO.setInterviewerScores(interviewerScores);
+                    discrepancies.add(discrepancyVO);
+                }
+            }
+        }
+
+        result.setDimensionDiscrepancies(discrepancies);
+        result.setHasDiscrepancy(!discrepancies.isEmpty());
+        return result;
+    }
+
+    public List<CandidateCompareVO> getCandidateCompare(List<Long> candidateIds) {
+        List<CandidateCompareVO> result = new ArrayList<>();
+
+        if (candidateIds == null || candidateIds.size() < 2 || candidateIds.size() > 5) {
+            throw new RuntimeException("候选人数量必须在2-5人之间");
+        }
+
+        Long positionId = null;
+
+        for (Long candidateId : candidateIds) {
+            Candidate candidate = candidateMapper.selectById(candidateId);
+            if (candidate == null) {
+                continue;
+            }
+
+            if (positionId == null) {
+                positionId = candidate.getPositionId();
+            } else if (!positionId.equals(candidate.getPositionId())) {
+                throw new RuntimeException("只能对比同岗位的候选人");
+            }
+
+            CandidateCompareVO vo = new CandidateCompareVO();
+            vo.setCandidateId(candidate.getId());
+            vo.setCandidateName(candidate.getName());
+
+            Position position = positionMapper.selectById(candidate.getPositionId());
+            if (position != null) {
+                vo.setPositionName(position.getPositionName());
+            }
+
+            Map<String, Double> dimensionScores = getDimensionAverages(candidateId);
+            vo.setDimensionScores(dimensionScores);
+
+            Map<String, Object> weightedSummary = calculateWeightedSummary(candidateId);
+            vo.setWeightedDimensionScores((Map<String, Double>) weightedSummary.get("weightedDimensionScores"));
+            vo.setTotalWeightedScore((Double) weightedSummary.get("weightedTotalScore"));
+
+            result.add(vo);
+        }
+
+        return result;
+    }
+
+    public List<FunnelStatVO> getFunnelStats(Long positionId) {
+        List<FunnelStatVO> result = new ArrayList<>();
+
+        String[] stages = {"RESUME_SCREEN", "TECH_INTERVIEW", "HR_INTERVIEW", "OFFER"};
+        String[] stageNames = {"简历筛选", "技术面", "HR面", "Offer"};
+
+        int previousCount = 0;
+
+        for (int i = 0; i < stages.length; i++) {
+            FunnelStatVO vo = new FunnelStatVO();
+            vo.setStage(stages[i]);
+            vo.setStageName(stageNames[i]);
+
+            QueryWrapper<Candidate> queryWrapper = new QueryWrapper<>();
+            if (positionId != null) {
+                queryWrapper.eq("position_id", positionId);
+            }
+            queryWrapper.eq("status", stages[i]);
+            Long countLong = candidateMapper.selectCount(queryWrapper);
+            int count = countLong != null ? countLong.intValue() : 0;
+            vo.setCount(count);
+
+            if (i == 0) {
+                vo.setConversionRate(100.0);
+            } else {
+                if (previousCount > 0) {
+                    double rate = (double) count / previousCount * 100;
+                    BigDecimal bd = BigDecimal.valueOf(rate).setScale(2, RoundingMode.HALF_UP);
+                    vo.setConversionRate(bd.doubleValue());
+                } else {
+                    vo.setConversionRate(0.0);
+                }
+            }
+
+            result.add(vo);
+            previousCount = count;
+        }
+
+        return result;
     }
 }

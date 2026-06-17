@@ -9,6 +9,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @Component
@@ -30,6 +32,18 @@ public class DataInitializer implements CommandLineRunner {
     private InterviewTaskMapper interviewTaskMapper;
 
     @Autowired
+    private BehaviorTagMapper behaviorTagMapper;
+
+    @Autowired
+    private EvaluationTemplateMapper evaluationTemplateMapper;
+
+    @Autowired
+    private TemplateDimensionMapper templateDimensionMapper;
+
+    @Autowired
+    private PositionTemplateMapper positionTemplateMapper;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Override
@@ -39,6 +53,8 @@ public class DataInitializer implements CommandLineRunner {
         initPositions();
         initCandidates();
         initInterviewTasks();
+        initBehaviorTags();
+        initEvaluationTemplate();
     }
 
     private void initDimensions() {
@@ -171,7 +187,7 @@ public class DataInitializer implements CommandLineRunner {
         c1.setPositionId(javaPosId);
         c1.setEducation("本科");
         c1.setWorkYears(5);
-        c1.setStatus("INTERVIEWING");
+        c1.setStatus("TECH_INTERVIEW");
         candidateMapper.insert(c1);
 
         Candidate c2 = new Candidate();
@@ -183,7 +199,7 @@ public class DataInitializer implements CommandLineRunner {
         c2.setPositionId(javaPosId);
         c2.setEducation("硕士");
         c2.setWorkYears(3);
-        c2.setStatus("INTERVIEWING");
+        c2.setStatus("TECH_INTERVIEW");
         candidateMapper.insert(c2);
 
         Candidate c3 = new Candidate();
@@ -229,6 +245,7 @@ public class DataInitializer implements CommandLineRunner {
         t1.setInterviewRound(1);
         t1.setInterviewType("技术面");
         t1.setInterviewTime(LocalDateTime.now().plusDays(1).withHour(10).withMinute(0));
+        t1.setVideoUrl("https://video.example.com/play/room101");
         t1.setStatus("PENDING");
         interviewTaskMapper.insert(t1);
 
@@ -239,6 +256,7 @@ public class DataInitializer implements CommandLineRunner {
         t2.setInterviewRound(2);
         t2.setInterviewType("技术面");
         t2.setInterviewTime(LocalDateTime.now().plusDays(2).withHour(14).withMinute(0));
+        t2.setVideoUrl("https://video.example.com/play/room102");
         t2.setStatus("PENDING");
         interviewTaskMapper.insert(t2);
 
@@ -249,6 +267,7 @@ public class DataInitializer implements CommandLineRunner {
         t3.setInterviewRound(1);
         t3.setInterviewType("技术面");
         t3.setInterviewTime(LocalDateTime.now().plusDays(3).withHour(9).withMinute(30));
+        t3.setVideoUrl("https://video.example.com/play/room103");
         t3.setStatus("PENDING");
         interviewTaskMapper.insert(t3);
 
@@ -259,9 +278,137 @@ public class DataInitializer implements CommandLineRunner {
         t4.setInterviewRound(1);
         t4.setInterviewType("技术面");
         t4.setInterviewTime(LocalDateTime.now().plusDays(4).withHour(11).withMinute(0));
+        t4.setVideoUrl("https://video.example.com/play/room104");
         t4.setStatus("PENDING");
         interviewTaskMapper.insert(t4);
 
         System.out.println("====== 面试任务数据初始化完成 ======");
+    }
+
+    private void initBehaviorTags() {
+        Long count = behaviorTagMapper.selectCount(null);
+        if (count > 0) {
+            return;
+        }
+
+        List<EvaluationDimension> dimensions = evaluationDimensionMapper.selectList(null);
+
+        List<String[]> professionalTags = Arrays.asList(
+            new String[]{"技术扎实", "POSITIVE"},
+            new String[]{"经验丰富", "POSITIVE"},
+            new String[]{"学习能力强", "POSITIVE"},
+            new String[]{"逻辑清晰", "POSITIVE"},
+            new String[]{"基础薄弱", "NEGATIVE"},
+            new String[]{"经验不足", "NEGATIVE"},
+            new String[]{"代码规范差", "NEGATIVE"}
+        );
+        List<String[]> communicationTags = Arrays.asList(
+            new String[]{"表达流畅", "POSITIVE"},
+            new String[]{"条理清晰", "POSITIVE"},
+            new String[]{"善于沟通", "POSITIVE"},
+            new String[]{"表达不清", "NEGATIVE"},
+            new String[]{"缺乏准备", "NEGATIVE"},
+            new String[]{"答非所问", "NEGATIVE"}
+        );
+        List<String[]> teamworkTags = Arrays.asList(
+            new String[]{"团队意识强", "POSITIVE"},
+            new String[]{"协作能力好", "POSITIVE"},
+            new String[]{"积极主动", "POSITIVE"},
+            new String[]{"独断专行", "NEGATIVE"},
+            new String[]{"缺乏协作", "NEGATIVE"}
+        );
+        List<String[]> jobFitTags = Arrays.asList(
+            new String[]{"高度匹配", "POSITIVE"},
+            new String[]{"有相关经验", "POSITIVE"},
+            new String[]{"潜力大", "POSITIVE"},
+            new String[]{"经验不匹配", "NEGATIVE"},
+            new String[]{"期望不符", "NEGATIVE"}
+        );
+        List<String[]> learningTags = Arrays.asList(
+            new String[]{"学习能力强", "POSITIVE"},
+            new String[]{"自驱力强", "POSITIVE"},
+            new String[]{"求知欲强", "POSITIVE"},
+            new String[]{"学习被动", "NEGATIVE"},
+            new String[]{"缺乏思考", "NEGATIVE"}
+        );
+
+        int sortOrder = 0;
+        for (EvaluationDimension dim : dimensions) {
+            List<String[]> tags;
+            switch (dim.getDimensionCode()) {
+                case "PROFESSIONAL_SKILL":
+                    tags = professionalTags;
+                    break;
+                case "COMMUNICATION":
+                    tags = communicationTags;
+                    break;
+                case "TEAMWORK":
+                    tags = teamworkTags;
+                    break;
+                case "JOB_FIT":
+                    tags = jobFitTags;
+                    break;
+                case "LEARNING_ABILITY":
+                    tags = learningTags;
+                    break;
+                default:
+                    tags = new ArrayList<>();
+            }
+            sortOrder = 0;
+            for (String[] tag : tags) {
+                BehaviorTag behaviorTag = new BehaviorTag();
+                behaviorTag.setDimensionId(dim.getId());
+                behaviorTag.setTagName(tag[0]);
+                behaviorTag.setTagType(tag[1]);
+                behaviorTag.setSortOrder(sortOrder++);
+                behaviorTagMapper.insert(behaviorTag);
+            }
+        }
+
+        System.out.println("====== 行为标签数据初始化完成 ======");
+    }
+
+    private void initEvaluationTemplate() {
+        Long count = evaluationTemplateMapper.selectCount(null);
+        if (count > 0) {
+            return;
+        }
+
+        EvaluationTemplate template = new EvaluationTemplate();
+        template.setTemplateName("通用技术岗位评价模板");
+        template.setTemplateDesc("适用于各类技术岗位的通用评价模板，包含5个核心维度");
+        template.setIsDefault(1);
+        template.setStatus(1);
+        evaluationTemplateMapper.insert(template);
+
+        List<EvaluationDimension> dimensions = evaluationDimensionMapper.selectList(
+            new QueryWrapper<EvaluationDimension>().eq("is_default", 1).orderByAsc("sort_order")
+        );
+
+        int[] weights = {30, 20, 15, 20, 15};
+        for (int i = 0; i < dimensions.size(); i++) {
+            EvaluationDimension dim = dimensions.get(i);
+            TemplateDimension td = new TemplateDimension();
+            td.setTemplateId(template.getId());
+            td.setDimensionId(dim.getId());
+            td.setDimensionCode(dim.getDimensionCode());
+            td.setDimensionName(dim.getDimensionName());
+            td.setDimensionDesc(dim.getDimensionDesc());
+            td.setWeightPercent(weights[i]);
+            td.setMaxScore(dim.getMaxScore());
+            td.setMinScore(dim.getMinScore());
+            td.setSortOrder(i + 1);
+            templateDimensionMapper.insert(td);
+        }
+
+        List<Position> positions = positionMapper.selectList(null);
+        for (Position pos : positions) {
+            PositionTemplate pt = new PositionTemplate();
+            pt.setPositionId(pos.getId());
+            pt.setTemplateId(template.getId());
+            positionTemplateMapper.insert(pt);
+        }
+
+        System.out.println("====== 评价模板数据初始化完成 ======");
     }
 }
